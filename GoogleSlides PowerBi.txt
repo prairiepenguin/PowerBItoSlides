@@ -1,0 +1,90 @@
+function addImagesToSlidesInTemplateDeck() {
+  var templateId = '1LEyKZGXbcjH0eus-_kh8AA_ds8J48k8UT99n3O9QE6Y';
+  var folderId = '1FvpERdRbors9rL1NjtTFpj3soQWQ9ry0';
+
+  var templatePresentation = SlidesApp.openById(templateId);
+  var templateSlide = templatePresentation.getSlides()[0]; // The only slide in template
+
+  var folder = DriveApp.getFolderById(folderId);
+  var filesIter = folder.getFiles();
+  var files = [];
+
+  // Collect all image files first
+  while (filesIter.hasNext()) {
+    var file = filesIter.next();
+    if (file.getMimeType().startsWith('image/')) {
+      files.push(file);
+    }
+  }
+
+  // Optionally, sort files alphabetically
+  files.sort(function(a, b) {
+    return a.getName().localeCompare(b.getName());
+  });
+
+  // Create and customize slides, keep a list of the new slides
+  var newSlides = [];
+  for (var i = 0; i < files.length; i++) {
+    var file = files[i];
+    var duplicatedSlide = templateSlide.duplicate();
+    newSlides.push(duplicatedSlide);
+
+    // Find relevant shapes
+    var shapes = duplicatedSlide.getShapes();
+    var imagePlaceholderShape = null;
+    var titleShape = null;
+    var numberShape = null;
+    for (var j = 0; j < shapes.length; j++) {
+      if (shapes[j].getText) {
+        var text = shapes[j].getText().asString().trim();
+        if (text === "PowerBI Image") imagePlaceholderShape = shapes[j];
+        if (text === "Title") titleShape = shapes[j];
+        if (text === "1") numberShape = shapes[j];
+      }
+    }
+
+    // Replace "PowerBI Image" shape with the actual image from the folder
+    if (imagePlaceholderShape) {
+      var left = imagePlaceholderShape.getLeft();
+      var top = imagePlaceholderShape.getTop();
+      var width = imagePlaceholderShape.getWidth();
+      var height = imagePlaceholderShape.getHeight();
+      imagePlaceholderShape.remove();
+
+      var img = duplicatedSlide.insertImage(file.getBlob());
+      img.setLeft(left);
+      img.setTop(top);
+      img.setWidth(width);
+      img.setHeight(height);
+    }
+
+    // Set the text of the "Title" shape to the file name (without extension)
+    if (titleShape) {
+      var fileName = file.getName();
+      var nameNoExt = fileName.replace(/\.[^/.]+$/, "");
+      titleShape.getText().setText(nameNoExt);
+    }
+    // Do not set slide number yet!
+  }
+
+  // Now, number the slides in the correct (visual) order (after the template)
+  // Slides are: [template, newSlides[N-1], ..., newSlides[0]]
+  // So iterate from end to start of newSlides
+  var slides = templatePresentation.getSlides();
+  for (var k = 1; k < slides.length; k++) { // skip template at 0
+    var slide = slides[k];
+    var shapes = slide.getShapes();
+    for (var j = 0; j < shapes.length; j++) {
+      if (shapes[j].getText) {
+        var text = shapes[j].getText().asString().trim();
+        if (text === "1" || !isNaN(Number(text))) {
+          // Number slides visually from 1..N (template is not counted)
+          shapes[j].getText().setText(k.toString());
+        }
+      }
+    }
+  }
+
+  // Optionally remove the template slide (if you don't want it):
+  // templateSlide.remove();
+}
